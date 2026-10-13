@@ -1,0 +1,289 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role { STUDENT COMPANY UNIVERSITY }
+enum AppStatus { PENDING INVITED REJECTED SIGNING ACTIVE FINISH_REQUESTED COMPLETED }
+enum ExtraType { CERTIFICATE ACHIEVEMENT }
+enum FileKind { AVATAR CERTIFICATE }
+enum RefKind { CITY FACULTY SPECIALTY }
+// ACTIVE — можно входить; PENDING_VERIFICATION — email ещё не подтверждён; UNCLAIMED — карточка ВУЗа из реестра без владельца (войти нельзя)
+enum AccountStatus { ACTIVE PENDING_VERIFICATION UNCLAIMED }
+enum EntityStatus { ACTIVE LIQUIDATED }
+enum CodePurpose { VERIFY_EMAIL }
+
+model User {
+  id           String   @id @default(uuid())
+  role         Role
+  email        String   @unique
+  passwordHash String
+  photoFileId  String?
+  city         String?
+  accountStatus   AccountStatus @default(ACTIVE)
+  emailVerifiedAt DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  emailCodes EmailCode[]
+  student    StudentProfile?    @relation("StudentUser")
+  company    CompanyProfile?
+  university UniversityProfile?
+  studentsOfUniversity StudentProfile[] @relation("StudentUniversity")
+  practices     Practice[]
+  notifications Notification[]
+  files         File[]
+  appsAsStudent    Application[] @relation("AppStudent")
+  appsAsCompany    Application[] @relation("AppCompany")
+  appsAsUniversity Application[] @relation("AppUniversity")
+}
+
+model StudentProfile {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  firstName    String
+  lastName     String
+  universityId String
+  faculty      String
+  specialty    String
+  course       Int
+  skills       String   @default("")
+  city         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user       User @relation("StudentUser", fields: [userId], references: [id], onDelete: Cascade)
+  university User @relation("StudentUniversity", fields: [universityId], references: [id])
+  extra      ExtraEducation[]
+
+  @@index([universityId, faculty, specialty, course, city])
+}
+
+model CompanyProfile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  companyName String
+  industry    String
+  city        String
+  isDemo      Boolean  @default(false)
+  // проверка по реестру юрлиц: БИН найден и действующий
+  bin         String?  @unique @db.VarChar(12)
+  verified    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entity LegalEntity? @relation(fields: [bin], references: [bin])
+}
+
+model UniversityProfile {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  universityName String
+  shortName      String
+  city           String
+  registryId     String?  @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  registry RegistryUniversity? @relation(fields: [registryId], references: [id])
+}
+
+model Practice {
+  id             String   @id @default(uuid())
+  title          String
+  companyId      String
+  city           String
+  direction      String
+  description    String
+  requirements   String
+  durationMonths Int
+  format         String
+  places         Int      @default(1)
+  datePublished  DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  company      User          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  applications Application[]
+
+  @@index([companyId])
+  @@index([city])
+  @@index([direction])
+}
+
+model Application {
+  id                  String    @id @default(uuid())
+  studentId           String
+  practiceId          String
+  companyId           String
+  universityId        String
+  status              AppStatus @default(PENDING)
+  signedByStudent     Boolean   @default(false)
+  signedByStudentAt   DateTime?
+  signedByCompany     Boolean   @default(false)
+  signedByCompanyAt   DateTime?
+  signedByUniversity  Boolean   @default(false)
+  signedByUniversityAt DateTime?
+  startDate           DateTime?
+  completedDate       DateTime?
+  reportText          String?
+  reportDate          DateTime?
+  date                DateTime  @default(now())
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  student    User     @relation("AppStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  company    User     @relation("AppCompany", fields: [companyId], references: [id], onDelete: Cascade)
+  university User     @relation("AppUniversity", fields: [universityId], references: [id])
+  practice   Practice @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  diary      DiaryEntry[]
+
+  @@unique([studentId, practiceId])
+  @@index([studentId])
+  @@index([companyId])
+  @@index([universityId])
+  @@index([status])
+}
+
+model DiaryEntry {
+  id            String   @id @default(uuid())
+  applicationId String
+  date          DateTime
+  text          String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+}
+
+model ExtraEducation {
+  id           String    @id @default(uuid())
+  studentId    String
+  type         ExtraType
+  title        String
+  organization String
+  date         DateTime
+  fileId       String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  student StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+}
+
+model File {
+  id           String   @id @default(uuid())
+  ownerId      String
+  kind         FileKind
+  path         String
+  mime         String
+  size         Int
+  originalName String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+}
+
+model Notification {
+  id            String   @id @default(uuid())
+  userId        String
+  type          String
+  text          String
+  applicationId String?
+  read          Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+}
+
+model Reference {
+  id        String   @id @default(uuid())
+  kind      RefKind
+  value     String
+  sort      Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([kind, value])
+}
+
+// ---------- Реестры РК ----------
+
+/// Реестр высших учебных заведений РК (импорт: npm run import:universities)
+model RegistryUniversity {
+  id        String   @id @default(uuid())
+  slug      String   @unique            // нормализованное название + город: ключ для повторного импорта
+  bin       String?  @unique @db.VarChar(12)
+  name      String
+  nameKz    String?
+  shortName String
+  city      String
+  region    String?
+  ownership String?                     // Государственный / Частный / АО / Национальный
+  website   String?
+  source    String   @default("CURATED")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile UniversityProfile?
+
+  @@index([city])
+  @@index([name])
+}
+
+/// Реестр юридических лиц (БИН). Первичный ключ — сам БИН: массовый импорт идёт одним SQL INSERT … ON CONFLICT.
+model LegalEntity {
+  bin          String       @id @db.VarChar(12)
+  name         String
+  nameKz       String?
+  legalForm    String?                  // ТОО, АО, ГУ, РГП …
+  industry     String?                  // сфера деятельности (ОКЭД)
+  oked         String?
+  city         String?
+  region       String?
+  address      String?
+  head         String?
+  registeredAt DateTime?
+  status       EntityStatus @default(ACTIVE)
+  source       String       @default("IMPORT")
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @default(now())
+
+  company CompanyProfile?
+
+  @@index([status])
+  @@index([city])
+  @@index([name])
+}
+
+/// Одноразовый код подтверждения email. Хранится только HMAC-хэш кода.
+model EmailCode {
+  id         String      @id @default(uuid())
+  userId     String
+  purpose    CodePurpose @default(VERIFY_EMAIL)
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int         @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+}
