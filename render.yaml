@@ -13,7 +13,7 @@ services:
       cd web && npm install --include=dev && npm run build &&
       cd ../server && npm install --include=dev && npx prisma generate
     startCommand: >-
-      cd server && npx prisma db push --skip-generate && (npm run db:indexes || true) && npx tsx scripts/seed-if-empty.ts && npx tsx src/server.ts
+      cd server && npx prisma db push --skip-generate && (npm run db:indexes || true) && npx tsx scripts/seed-if-empty.ts && (npx tsx scripts/import-gbd-json.ts || true) && npx tsx src/server.ts
     healthCheckPath: /api/health
     envVars:
       - key: DATABASE_URL
