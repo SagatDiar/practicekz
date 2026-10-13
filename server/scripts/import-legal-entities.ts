@@ -1,21 +1,30 @@
-/**
- * Загрузка реестра юридических лиц (БИН) в базу.
- *   npm run import:entities -- путь/к/файлу.csv [ИСТОЧНИК]
- * Файл: CSV (разделитель ; , или Tab), JSON или JSONL. Нужны столбцы «БИН» и «Наименование»; остальные необязательны:
- * Организационно-правовая форма, ОКЭД, Сфера деятельности, Город, Область, Адрес, Руководитель, Дата регистрации, Статус.
- * Строки с неверным БИН (не проходит контрольная сумма) пропускаются и попадают в отчёт.
- * Подходит для файлов в миллионы строк: читается потоком, пишется пачками по 2000.
- */
-import { importLegalEntities } from "../src/registry/import.js";
-import { prisma } from "../src/utils/db.js";
+// server/scripts/import-legal-entities.ts
+// Іске қосу (Render Shell): npx tsx scripts/import-legal-entities.ts
+import { PrismaClient } from "@prisma/client";
+import fs from "node:fs";
+import path from "node:path";
 
-const file = process.argv[2];
-if (!file) { console.error("Укажите файл: npm run import:entities -- реестр.csv"); process.exit(1); }
-const source = process.argv[3] ?? "IMPORT";
+const prisma = new PrismaClient();
+const file = path.join(__dirname, "companies.clean.json");
 
-const t0 = Date.now();
-const rep = await importLegalEntities(file, source, (n) => process.stdout.write(`\r  прочитано строк: ${n}`));
-console.log(`\nЮрлица: прочитано ${rep.read}, сохранено ${rep.saved}, пропущено ${rep.skipped} (${((Date.now() - t0) / 1000).toFixed(1)} с)`);
-rep.errors.forEach((e) => console.log("  ·", e));
-console.log(`Всего юрлиц в базе: ${await prisma.legalEntity.count()}`);
-await prisma.$disconnect();
+async function main() {
+  const rows = JSON.parse(fs.readFileSync(file, "utf8"));
+  let created = 0, updated = 0;
+  for (const r of rows) {
+    // ВНИМАНИЕ: модель `company` и поля ниже — предположение, подправьте под schema.prisma
+    const data = {
+      name: r.nameRu,
+      nameKz: r.nameKz || null,
+      bin: r.bin,
+      director: r.director || null,
+      address: r.addressRu || r.addressKz || null,
+      activity: r.activityRu || null,
+      registeredAt: new Date(r.registeredAt),
+    };
+    const existing = await prisma.company.findUnique({ where: { bin: r.bin } });
+    if (existing) { await prisma.company.update({ where: { bin: r.bin }, data }); updated++; }
+    else { await prisma.company.create({ data }); created++; }
+  }
+  console.log(`Дайын: жаңа ${created}, жаңартылған ${updated}`);
+}
+main().finally(() => prisma.$disconnect());
