@@ -28,7 +28,8 @@ export async function issueEmailCode(user: { id: string; email: string }): Promi
     subject: "PracticeKZ: код подтверждения email",
     text: `Ваш код подтверждения: ${code}\nОн действителен 15 минут. Если вы не регистрировались на PracticeKZ — проигнорируйте это письмо.`,
   });
-  return env.NODE_ENV !== "production" && !smtpConfigured() ? { devCode: code } : {};
+    // Пока SMTP не настроен, показываем код прямо на сайте (демо-режим).
+  return !smtpConfigured() ? { devCode: code } : {};
 }
 
 /** Проверяет код; при успехе помечает email подтверждённым и активирует аккаунт. */
