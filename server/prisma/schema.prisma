@@ -7,15 +7,46 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role { STUDENT COMPANY UNIVERSITY }
-enum AppStatus { PENDING INVITED REJECTED SIGNING ACTIVE FINISH_REQUESTED COMPLETED }
-enum ExtraType { CERTIFICATE ACHIEVEMENT }
-enum FileKind { AVATAR CERTIFICATE }
-enum RefKind { CITY FACULTY SPECIALTY }
+enum Role {
+  STUDENT
+  COMPANY
+  UNIVERSITY
+}
+enum AppStatus {
+  PENDING
+  INVITED
+  REJECTED
+  SIGNING
+  ACTIVE
+  FINISH_REQUESTED
+  COMPLETED
+}
+enum ExtraType {
+  CERTIFICATE
+  ACHIEVEMENT
+}
+enum FileKind {
+  AVATAR
+  CERTIFICATE
+}
+enum RefKind {
+  CITY
+  FACULTY
+  SPECIALTY
+}
 // ACTIVE — можно входить; PENDING_VERIFICATION — email ещё не подтверждён; UNCLAIMED — карточка ВУЗа из реестра без владельца (войти нельзя)
-enum AccountStatus { ACTIVE PENDING_VERIFICATION UNCLAIMED }
-enum EntityStatus { ACTIVE LIQUIDATED }
-enum CodePurpose { VERIFY_EMAIL }
+enum AccountStatus {
+  ACTIVE
+  PENDING_VERIFICATION
+  UNCLAIMED
+}
+enum EntityStatus {
+  ACTIVE
+  LIQUIDATED
+}
+enum CodePurpose {
+  VERIFY_EMAIL
+}
 
 model User {
   id           String   @id @default(uuid())
